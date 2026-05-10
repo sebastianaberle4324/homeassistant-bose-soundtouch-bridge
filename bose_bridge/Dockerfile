@@ -4,7 +4,8 @@ FROM ${BUILD_FROM}
 RUN apk add --no-cache python3 py3-pip py3-lxml \
  && pip3 install --no-cache-dir --break-system-packages \
         upnpclient \
-        websocket-client
+        websocket-client \
+        paho-mqtt
 
 COPY bridge.py /
 COPY run.sh /

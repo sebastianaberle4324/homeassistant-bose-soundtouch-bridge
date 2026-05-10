@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0
+
+- **Speaker now displays the station name and logo.** Each `Play` call
+  carries DIDL-Lite metadata (`dc:title`, `upnp:albumArtURI`,
+  `audioBroadcast` class). Station name + favicon are auto-fetched from
+  [radio-browser.info](https://www.radio-browser.info/) by stream URL
+  at startup and cached for the session.
+- **Trigger presets from Home Assistant.** The add-on connects to the
+  Supervisor-provided MQTT broker (Mosquitto add-on) and publishes Home
+  Assistant MQTT-discovery configs so each preset auto-appears as a
+  `button.bose_<id>_preset_N` entity. Press the entity in HA → bridge
+  plays the same URL it would play on a physical button press.
+  Requires the Mosquitto Broker add-on running and the MQTT integration
+  configured in HA (the standard auto-discovery setup).
+- The add-on declares `services: ["mqtt:need"]` so the Supervisor
+  injects MQTT credentials automatically — no manual configuration.
+  Falls back gracefully if MQTT is unavailable (logs a warning, only
+  physical buttons keep working).
+
 ## 1.2.1
 
 - Fix multi-architecture build. The `1.2.0` Dockerfile only pulled the
