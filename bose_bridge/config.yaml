@@ -1,6 +1,6 @@
 name: "Bose SoundTouch Bridge"
 description: "Fires Home Assistant events when physical preset buttons are pressed on Bose SoundTouch speakers (after the Bose cloud retirement 2026). Use automations to react — e.g. play music via Music Assistant."
-version: "2.0.0"
+version: "2.0.1"
 slug: "bose_bridge"
 url: "https://github.com/sebastianaberle4324/homeassistant-bose-soundtouch-bridge"
 init: false
