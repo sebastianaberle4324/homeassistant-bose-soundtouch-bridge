@@ -10,6 +10,8 @@ arch:
 boot: auto
 startup: services
 host_network: true
+hassio_api: true
+homeassistant_api: true
 options:
   bose_host: ""
   sync_presets_on_startup: true
