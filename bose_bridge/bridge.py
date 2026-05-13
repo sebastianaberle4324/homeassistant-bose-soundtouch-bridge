@@ -23,7 +23,7 @@ DISCOVERED_PATH = "/data/discovered.json"
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN")
 SUPERVISOR_URL = "http://supervisor"
 PRESET_RE = re.compile(r'<nowSelectionUpdated>\s*<preset id="(\d+)"')
-SOURCE_RE = re.compile(r'<source>(\w+)</source>')
+SOURCE_RE = re.compile(r'source="(\w+)"')
 SSDP_ADDR = ("239.255.255.250", 1900)
 SSDP_TARGET = "urn:schemas-upnp-org:device:MediaRenderer:1"
 PLACEHOLDER_URL = "http://icecast.vrtcdn.be/radio1-high.mp3"

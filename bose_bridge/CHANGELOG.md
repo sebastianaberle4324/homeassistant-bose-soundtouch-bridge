@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.3.3
+
+- **Fix power on/off detection (critical).** `SOURCE_RE` was matching
+  `<source>STANDBY</source>` (XML element) but the speaker sends
+  `source="STANDBY"` (XML attribute). The regex never matched, so
+  standby detection, auto-stop, and auto-play were all silently broken.
+
 ## 3.3.2
 
 - **Fix power-on detection.** On startup the addon now reads `/now_playing`
