@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.1.0
+
+- **Auto-detect Music Assistant entity.** If `media_player_entity` is
+  left blank, the addon queries HA for entities with a `mass_player_id`
+  attribute. If exactly one is found it is used automatically.
+- **Preset defaults.** Empty presets now show "Preset 1"..."Preset 6"
+  in the config UI instead of blank fields.
+- **Config descriptions.** Each option now has a help text with examples
+  (e.g. `192.168.1.42`, `library://radio/6`).
+- **Removed `placeholder_url` from config.** The placeholder stream URL
+  is now hardcoded internally — it was never user-facing functionality.
+- **Updated README** to reflect v3 features (direct MA playback,
+  auto-discovery, hybrid event/playback mode).
+
 ## 3.0.0
 
 - **Breaking: Direct Music Assistant integration.** The `preset_names`

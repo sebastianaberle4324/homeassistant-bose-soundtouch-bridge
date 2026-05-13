@@ -1,61 +1,90 @@
 # Bose SoundTouch Bridge
 
-Fires **Home Assistant events** when physical preset buttons are pressed
-on Bose SoundTouch speakers — after the **Bose cloud retirement (2026)**.
+Maps physical **preset buttons** on Bose SoundTouch speakers to
+**Music Assistant** playback — after the **Bose cloud retirement (2026)**.
 
 ## What this does
 
 When you press one of the six preset buttons on the speaker, this add-on
-fires a `bose_soundtouch_preset_pressed` event in Home Assistant. You
-can then use automations to react — e.g. play music via Music Assistant,
-trigger scenes, or anything else HA can do.
+can do two things (or both):
 
-This gives you full flexibility: instead of being limited to plain HTTP
-streams, you can play commercial streaming services (Spotify, Tidal,
-etc.) through Music Assistant or any other integration.
+1. **Play media via Music Assistant** — if you configured a `media_id`
+   for that preset (e.g. `library://radio/6`).
+2. **Fire a Home Assistant event** (`bose_soundtouch_preset_pressed`) —
+   always, so you can add custom automations on top.
+
+Presets without a `media_id` only fire the event, giving you full
+flexibility for non-Music-Assistant use cases (scenes, scripts, etc.).
+
+## How it works
+
+- On startup the add-on connects to the speaker's local WebSocket
+  (port 8080) and listens for preset button presses.
+- Empty preset slots are automatically populated with placeholders so
+  all 6 buttons fire events (via the speaker's `/storePreset` API).
+- If `media_player_entity` is left blank, the add-on auto-detects your
+  Music Assistant media player.
+- If a preset has a `media_id` but no `name`, the add-on resolves the
+  name from Music Assistant on startup.
 
 ## Event format
 
 ```yaml
 event_type: bose_soundtouch_preset_pressed
 data:
-  preset: 3          # 1–6
+  preset: 3          # 1-6
   device_id: "A0B1C2D3E4F5"
   device_name: "Living Room"
   speaker_host: "192.168.1.42"
 ```
 
-## Example automation
+## Setup
+
+1. Install this add-on (see root README for install button).
+2. Open the add-on Configuration tab.
+3. Set `bose_host` to the speaker's IP, or leave blank for auto-discovery.
+4. Set `media_player_entity` to your Music Assistant media player
+   (e.g. `media_player.soundtouch_20_music_assistant`), or leave blank
+   for auto-detection.
+5. Fill in the `presets` list — set `media_id` for Music Assistant
+   playback (e.g. `library://radio/6`), or leave empty for event-only.
+   The `name` field is shown on the speaker's display; leave blank to
+   auto-resolve from Music Assistant.
+6. **Save** then **Start** the add-on. Check the **Log** tab:
+   ```
+   [info] speaker: Living Room (SoundTouch 30) - id A0B1C2D3E4F5
+   [ma] auto-detected: media_player.soundtouch_30_music_assistant
+   [cfg] preset 1: library://radio/6 (Radio Hamburg)
+   [cfg] preset 2: library://radio/9 (N-JOY)
+   [cfg] preset 3: (event only)
+   [sync] 6 empty slot(s) need writing: [1, 2, 3, 4, 5, 6]
+   [ws] connected to ws://192.168.1.42:8080
+   ```
+7. Press a preset button on the speaker!
+
+## Configuration
+
+| Option | Default | Description |
+|---|---|---|
+| `bose_host` | `""` | Speaker IP. Leave blank for SSDP auto-discovery. |
+| `sync_presets_on_startup` | `true` | Populate empty preset slots so all 6 buttons work. |
+| `media_player_entity` | `""` | Music Assistant entity. Leave blank for auto-detection. |
+| `presets` | 6 empty slots | List of `{media_id, name}`. Set `media_id` for MA playback, leave empty for event-only. |
+
+## Example automation (event-only preset)
 
 ```yaml
 automation:
-  - alias: "Bose Preset 1 → Play Radio via Music Assistant"
+  - alias: "Bose Preset 5 - Toggle lights"
     trigger:
       - platform: event
         event_type: bose_soundtouch_preset_pressed
         event_data:
-          preset: 1
+          preset: 5
     action:
-      - action: mass.play_media
-        data:
-          media_id: "Radio 1"
-          media_type: radio
+      - action: light.toggle
         target:
-          entity_id: media_player.bose_soundtouch
-
-  - alias: "Bose Preset 2 → Play Spotify playlist"
-    trigger:
-      - platform: event
-        event_type: bose_soundtouch_preset_pressed
-        event_data:
-          preset: 2
-    action:
-      - action: mass.play_media
-        data:
-          media_id: "spotify://playlist/37i9dQZF1DXcBWIGoYBM5M"
-          media_type: playlist
-        target:
-          entity_id: media_player.bose_soundtouch
+          entity_id: light.living_room
 ```
 
 ## Requirements
@@ -63,39 +92,7 @@ automation:
 - A Bose SoundTouch speaker (any model) on the same network as
   Home Assistant
 - Home Assistant OS or Supervised
-
-## Setup
-
-1. Install this add-on (see *Install* below).
-2. Open the add-on → **Configuration**.
-3. Either leave `bose_host` blank to auto-discover the speaker via SSDP,
-   or set it to the speaker's IP address (e.g. `192.168.1.42`).
-4. Set `placeholder_url` to any valid HTTP stream URL (e.g.
-   `http://icecast.vrtcdn.be/radio1-high.mp3`). This is used to populate
-   empty preset slots on the speaker so all 6 buttons fire events.
-   Leave blank if all presets are already set.
-5. Leave `sync_presets_on_startup` enabled (default). On startup, the
-   add-on writes a placeholder into any empty preset slot via the
-   speaker's `/storePreset` API — instant, no audio blips.
-6. **Save** → **Start** → check the **Log** tab; it should print:
-   ```
-   [info] speaker: Living Room (SoundTouch 30) — id A0B1C2D3E4F5
-   [sync] 4 empty slot(s) need writing: [1, 2, 3, 4]
-   [sync]  ✓ preset 1 stored
-   ...
-   [ws] connected to ws://192.168.1.42:8080
-   ```
-7. Press a preset button → check **Developer Tools → Events** for
-   `bose_soundtouch_preset_pressed`.
-8. Create automations that react to the event (see example above).
-
-## Configuration
-
-| Option | Default | Description |
-|---|---|---|
-| `bose_host` | `""` | Speaker IP. Leave blank for SSDP auto-discovery. |
-| `sync_presets_on_startup` | `true` | Write placeholders into empty preset slots so all 6 buttons fire events. |
-| `placeholder_url` | `""` | Any HTTP stream URL used as placeholder for empty slots. |
+- Music Assistant (optional, for direct playback)
 
 ## Install
 

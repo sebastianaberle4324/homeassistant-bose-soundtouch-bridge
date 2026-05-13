@@ -23,6 +23,7 @@ SUPERVISOR_URL = "http://supervisor"
 PRESET_RE = re.compile(r'<nowSelectionUpdated>\s*<preset id="(\d+)"')
 SSDP_ADDR = ("239.255.255.250", 1900)
 SSDP_TARGET = "urn:schemas-upnp-org:device:MediaRenderer:1"
+PLACEHOLDER_URL = "http://icecast.vrtcdn.be/radio1-high.mp3"
 
 
 # ---------- config ---------------------------------------------------------
@@ -37,7 +38,6 @@ def load_options() -> dict:
         "bose_host": os.environ.get("BOSE_HOST", "").strip(),
         "sync_presets_on_startup": os.environ.get(
             "SYNC_PRESETS_ON_STARTUP", "true").lower() in ("1", "true", "yes", "on"),
-        "placeholder_url": os.environ.get("PLACEHOLDER_URL", "").strip(),
         "media_player_entity": os.environ.get("MEDIA_PLAYER_ENTITY", "").strip(),
         "presets": [],
     }
@@ -118,7 +118,7 @@ def _preset_media_id(presets: list[dict], n: int) -> str:
     return ""
 
 
-def sync_presets(host: str, placeholder_url: str, presets: list[dict]):
+def sync_presets(host: str, presets: list[dict]):
     """Ensure all 6 preset slots are populated so physical button presses
     emit WebSocket events. Writes a placeholder via /storePreset to any
     empty slot. Uses unique URLs per slot to avoid deduplication."""
@@ -129,7 +129,7 @@ def sync_presets(host: str, placeholder_url: str, presets: list[dict]):
         return
     print(f"[sync] {len(empty)} empty slot(s) need writing: {empty}")
     for n in empty:
-        url = f"{placeholder_url}?preset={n}" if "?" not in placeholder_url else f"{placeholder_url}&preset={n}"
+        url = f"{PLACEHOLDER_URL}?preset={n}"
         name = _preset_name(presets, n)
         body = (
             f'<preset id="{n}">'
@@ -207,6 +207,42 @@ def play_media(entity_id: str, media_id: str):
         print(f"[ma] failed to play media: {e}")
 
 
+def discover_media_player() -> str:
+    """Auto-detect a Music Assistant media_player entity via the HA states API.
+    Returns the entity_id of the first entity whose platform is
+    'music_assistant', or empty string if none found."""
+    if not SUPERVISOR_TOKEN:
+        return ""
+    try:
+        req = urllib.request.Request(
+            f"{SUPERVISOR_URL}/core/api/states",
+            headers={"Authorization": f"Bearer {SUPERVISOR_TOKEN}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            states = json.loads(r.read().decode())
+    except Exception as e:
+        print(f"[ma] auto-discovery failed: {e}")
+        return ""
+
+    ma_entities = [
+        s["entity_id"] for s in states
+        if s.get("entity_id", "").startswith("media_player.")
+        and s.get("attributes", {}).get("mass_player_id")
+    ]
+    if not ma_entities:
+        print("[ma] no Music Assistant media_player entities found")
+        return ""
+    if len(ma_entities) == 1:
+        print(f"[ma] auto-detected: {ma_entities[0]}")
+        return ma_entities[0]
+    # Multiple found — list them, pick none
+    print(f"[ma] found {len(ma_entities)} Music Assistant entities:")
+    for e in ma_entities:
+        print(f"[ma]   - {e}")
+    print("[ma] set media_player_entity in config to pick one")
+    return ""
+
+
 def resolve_preset_names(entity_id: str, presets: list[dict]) -> list[dict]:
     """Resolve missing preset names from Music Assistant. For each preset
     that has a media_id but no name, briefly plays it and reads back the
@@ -282,6 +318,10 @@ def main():
     entity_id = (cfg.get("media_player_entity") or "").strip()
     presets = cfg.get("presets") or []
 
+    # Auto-detect media_player entity if not configured
+    if not entity_id:
+        entity_id = discover_media_player()
+
     # Log preset config
     has_ma_presets = False
     for i, p in enumerate(presets):
@@ -311,14 +351,11 @@ def main():
         presets = resolve_preset_names(entity_id, presets)
 
     # Preset sync -------------------------------------------------------
-    placeholder = (cfg.get("placeholder_url") or "").strip()
-    if cfg.get("sync_presets_on_startup", True) and placeholder:
+    if cfg.get("sync_presets_on_startup", True):
         try:
-            sync_presets(host, placeholder, presets)
+            sync_presets(host, presets)
         except Exception as e:
             print(f"[sync] failed: {e}")
-    elif cfg.get("sync_presets_on_startup", True) and not placeholder:
-        print("[sync] sync_presets_on_startup enabled but no placeholder_url set — skipping")
     else:
         print("[sync] preset sync disabled")
 

@@ -1,17 +1,29 @@
 # Home Assistant: Bose SoundTouch Bridge
 
-A Home Assistant add-on that fires **events** when physical preset
-buttons are pressed on Bose SoundTouch speakers — after the **Bose cloud
-retirement (2026)** broke TuneIn presets, the SoundTouch app, and most
-cloud sources.
+A Home Assistant add-on that maps **physical preset buttons** on Bose
+SoundTouch speakers to **Music Assistant** playback — after the
+**Bose cloud retirement (2026)** broke TuneIn presets, the SoundTouch
+app, and most cloud sources.
 
-The add-on listens to the speaker's local WebSocket and fires a
-`bose_soundtouch_preset_pressed` event in Home Assistant. Use
-automations to react — e.g. play music via Music Assistant, trigger
-scenes, or control any media player.
+Press a preset button on the speaker and it plays the configured radio
+station or media via Music Assistant. Presets without a media ID simply
+fire a Home Assistant event for custom automations.
 
 See [`bose_bridge/README.md`](bose_bridge/README.md) for full docs,
-event format, and example automations.
+configuration options, and example automations.
+
+## Features
+
+- **Direct Music Assistant playback** — configure a `media_id` per
+  preset button (e.g. `library://radio/6`)
+- **Event-only mode** — presets without a `media_id` fire
+  `bose_soundtouch_preset_pressed` events for custom automations
+- **Auto-discovery** — speaker (SSDP) and Music Assistant entity are
+  detected automatically if not configured
+- **Auto-resolve preset names** — station names are read from Music
+  Assistant and shown on the speaker's display
+- **Preset sync** — empty slots are populated on startup so all 6
+  buttons work out of the box
 
 ## Install
 
@@ -29,8 +41,8 @@ event format, and example automations.
 | Spotify Connect | ✅ still works | not needed |
 | AUX in | ✅ still works | not needed |
 | TuneIn presets | ❌ broken | ✅ fires HA event |
-| Physical preset buttons | ❌ mostly dead | ✅ fires HA event → automation handles playback |
-| Any media via Music Assistant | — | ✅ triggered by preset button event |
+| Physical preset buttons | ❌ mostly dead | ✅ plays via Music Assistant or fires HA event |
+| Any media via Music Assistant | — | ✅ configured per preset button |
 
 ## License
 

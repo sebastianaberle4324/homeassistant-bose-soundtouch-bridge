@@ -9,8 +9,8 @@ Usage:
   # Specify speaker IP:
   python test_local.py --host 192.168.1.42
 
-  # Sync empty preset slots first (needs a placeholder stream URL):
-  python test_local.py --host 192.168.1.42 --sync --placeholder-url http://icecast.vrtcdn.be/radio1-high.mp3
+  # Sync empty preset slots first:
+  python test_local.py --host 192.168.1.42 --sync
 
   # Actually fire events to a Home Assistant instance:
   python test_local.py --host 192.168.1.42 --ha-url http://192.168.1.100:8123 --ha-token YOUR_LONG_LIVED_TOKEN
@@ -41,6 +41,7 @@ import websocket
 SSDP_ADDR = ("239.255.255.250", 1900)
 SSDP_TARGET = "urn:schemas-upnp-org:device:MediaRenderer:1"
 PRESET_RE = re.compile(r'<nowSelectionUpdated>\s*<preset id="(\d+)"')
+PLACEHOLDER_URL = "http://icecast.vrtcdn.be/radio1-high.mp3"
 
 CYAN = "\033[36m"
 GREEN = "\033[32m"
@@ -133,7 +134,7 @@ def _preset_media_id(presets: list[dict], n: int) -> str:
     return ""
 
 
-def sync_presets(host: str, placeholder_url: str, presets: list[dict]):
+def sync_presets(host: str, presets: list[dict]):
     populated = _get_populated_presets(host)
     empty = [n for n in range(1, 7) if n not in populated]
     if not empty:
@@ -141,7 +142,7 @@ def sync_presets(host: str, placeholder_url: str, presets: list[dict]):
         return
     print(f"{YELLOW}[sync]{RESET} {len(empty)} empty slot(s) need writing: {empty}")
     for n in empty:
-        url = f"{placeholder_url}?preset={n}" if "?" not in placeholder_url else f"{placeholder_url}&preset={n}"
+        url = f"{PLACEHOLDER_URL}?preset={n}"
         name = _preset_name(presets, n)
         body = (
             f'<preset id="{n}">'
@@ -195,8 +196,6 @@ def main():
                         help="Home Assistant long-lived access token")
     parser.add_argument("--sync", action="store_true",
                         help="Write placeholder to empty preset slots so all 6 buttons fire events")
-    parser.add_argument("--placeholder-url", default=os.environ.get("PLACEHOLDER_URL", ""),
-                        help="Stream URL to write into empty preset slots (required with --sync)")
     parser.add_argument("--ma-entity", default=os.environ.get("MA_ENTITY", ""),
                         help="Music Assistant media_player entity for playback")
     parser.add_argument("--presets-file", default="",
@@ -234,13 +233,9 @@ def main():
 
     # Preset sync
     if args.sync:
-        placeholder = args.placeholder_url.strip()
-        if not placeholder:
-            print(f"{RED}[error]{RESET} --sync requires --placeholder-url")
-            sys.exit(1)
-        print(f"{CYAN}[sync]{RESET} syncing empty preset slots with: {placeholder}")
+        print(f"{CYAN}[sync]{RESET} syncing empty preset slots...")
         try:
-            sync_presets(host, placeholder, presets)
+            sync_presets(host, presets)
         except Exception as e:
             print(f"{RED}[sync]{RESET} failed: {e}")
 
