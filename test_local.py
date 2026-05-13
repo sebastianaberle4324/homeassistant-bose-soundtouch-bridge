@@ -111,7 +111,8 @@ def _get_populated_presets(host: str) -> set[int]:
     return set(int(m) for m in re.findall(r'<preset id="(\d+)"', xml))
 
 
-def sync_presets(host: str, placeholder_url: str):
+def sync_presets(host: str, placeholder_url: str, preset_names: list[str] | None = None):
+    names = preset_names or []
     populated = _get_populated_presets(host)
     empty = [n for n in range(1, 7) if n not in populated]
     if not empty:
@@ -120,11 +121,12 @@ def sync_presets(host: str, placeholder_url: str):
     print(f"{YELLOW}[sync]{RESET} {len(empty)} empty slot(s) need writing: {empty}")
     for n in empty:
         url = f"{placeholder_url}?preset={n}" if "?" not in placeholder_url else f"{placeholder_url}&preset={n}"
+        name = names[n - 1] if n - 1 < len(names) else f"Preset {n}"
         body = (
             f'<preset id="{n}">'
             f'<ContentItem source="UPNP" location="{url}" '
             f'sourceAccount="UPnPUserName" isPresetable="true">'
-            f'<itemName>Preset {n}</itemName>'
+            f'<itemName>{name}</itemName>'
             f'</ContentItem></preset>'
         ).encode()
         req = urllib.request.Request(

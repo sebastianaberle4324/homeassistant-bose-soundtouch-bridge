@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.0
+
+- **Feature:** New `preset_names` config option — set custom display names
+  per preset button (e.g. "Radio Hamburg", "N-JOY"). These names appear on
+  the SoundTouch speaker's on-device display when a button is pressed.
+  Defaults to "Preset 1" … "Preset 6".
+
 ## 2.0.1
 
 - **Fix:** Add `hassio_api` and `homeassistant_api` flags to `config.yaml`.

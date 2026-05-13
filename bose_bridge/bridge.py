@@ -99,10 +99,11 @@ def _get_populated_presets(host: str) -> set[int]:
     return set(int(m) for m in re.findall(r'<preset id="(\d+)"', xml))
 
 
-def sync_presets(host: str, placeholder_url: str):
+def sync_presets(host: str, placeholder_url: str, preset_names: list[str] | None = None):
     """Ensure all 6 preset slots are populated so physical button presses
     emit WebSocket events. Writes a placeholder via /storePreset to any
     empty slot. Uses unique URLs per slot to avoid deduplication."""
+    names = preset_names or []
     populated = _get_populated_presets(host)
     empty = [n for n in range(1, 7) if n not in populated]
     if not empty:
@@ -111,11 +112,12 @@ def sync_presets(host: str, placeholder_url: str):
     print(f"[sync] {len(empty)} empty slot(s) need writing: {empty}")
     for n in empty:
         url = f"{placeholder_url}?preset={n}" if "?" not in placeholder_url else f"{placeholder_url}&preset={n}"
+        name = names[n - 1] if n - 1 < len(names) else f"Preset {n}"
         body = (
             f'<preset id="{n}">'
             f'<ContentItem source="UPNP" location="{url}" '
             f'sourceAccount="UPnPUserName" isPresetable="true">'
-            f'<itemName>Preset {n}</itemName>'
+            f'<itemName>{name}</itemName>'
             f'</ContentItem></preset>'
         ).encode()
         req = urllib.request.Request(
@@ -184,9 +186,10 @@ def main():
 
     # Preset sync -------------------------------------------------------
     placeholder = (cfg.get("placeholder_url") or "").strip()
+    preset_names = cfg.get("preset_names") or []
     if cfg.get("sync_presets_on_startup", True) and placeholder:
         try:
-            sync_presets(host, placeholder)
+            sync_presets(host, placeholder, preset_names)
         except Exception as e:
             print(f"[sync] failed: {e}")
     elif cfg.get("sync_presets_on_startup", True) and not placeholder:
