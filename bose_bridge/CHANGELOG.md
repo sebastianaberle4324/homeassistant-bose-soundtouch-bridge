@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.3.2
+
+- **Fix power-on detection.** On startup the addon now reads `/now_playing`
+  to detect whether the speaker is already in standby. Previously
+  `was_standby` always started as `false`, so the first
+  STANDBY -> INVALID_SOURCE transition was missed.
+
 ## 3.3.1
 
 - **Security: remove admin role.** Config persistence now uses a local

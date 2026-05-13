@@ -1,6 +1,6 @@
 name: "Bose SoundTouch Bridge"
 description: "Maps physical preset buttons on Bose SoundTouch speakers to Music Assistant playback. Press a button — the configured radio station or media plays via Music Assistant. Also fires HA events for additional automations."
-version: "3.3.1"
+version: "3.3.2"
 slug: "bose_bridge"
 url: "https://github.com/sebastianaberle4324/homeassistant-bose-soundtouch-bridge"
 init: false

@@ -484,7 +484,20 @@ def main():
 
     # WebSocket loop ----------------------------------------------------
     last_preset = [1]       # mutable so closures can update it (default: preset 1)
-    was_standby = [False]   # track standby state for power-on detection
+
+    # Detect initial standby state from /now_playing
+    initial_standby = False
+    try:
+        with urllib.request.urlopen(f"http://{host}:8090/now_playing", timeout=5) as r:
+            np_xml = r.read().decode()
+        if SOURCE_RE.search(np_xml) and SOURCE_RE.search(np_xml).group(1) == "STANDBY":
+            initial_standby = True
+            print("[cfg] speaker is currently in standby")
+        else:
+            print("[cfg] speaker is currently on")
+    except Exception:
+        pass
+    was_standby = [initial_standby]
 
     def on_message(_ws, msg):
         # --- power on/off detection ---
