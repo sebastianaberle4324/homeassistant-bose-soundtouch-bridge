@@ -227,7 +227,7 @@ def discover_media_player() -> str:
     ma_entities = [
         s["entity_id"] for s in states
         if s.get("entity_id", "").startswith("media_player.")
-        and s.get("attributes", {}).get("mass_player_id")
+        and s.get("attributes", {}).get("mass_player_type")
     ]
     if not ma_entities:
         print("[ma] no Music Assistant media_player entities found")
