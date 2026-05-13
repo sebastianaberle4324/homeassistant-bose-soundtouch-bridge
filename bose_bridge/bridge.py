@@ -267,7 +267,6 @@ def play_media(entity_id: str, media_id: str):
     data = json.dumps({
         "entity_id": entity_id,
         "media_id": media_id,
-        "media_type": "radio",
         "enqueue": "replace",
     }).encode()
     req = urllib.request.Request(

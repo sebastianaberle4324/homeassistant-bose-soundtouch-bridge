@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.3.4
+
+- **Remove hardcoded `media_type: radio` from play_media call.** Music
+  Assistant auto-detects the media type, so presets now work with
+  playlists, albums, tracks, and radio stations without any extra config.
+
 ## 3.3.3
 
 - **Fix power on/off detection (critical).** `SOURCE_RE` was matching
