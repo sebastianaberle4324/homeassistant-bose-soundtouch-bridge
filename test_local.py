@@ -15,6 +15,14 @@ Usage:
   # Actually fire events to a Home Assistant instance:
   python test_local.py --host 192.168.1.42 --ha-url http://192.168.1.100:8123 --ha-token YOUR_LONG_LIVED_TOKEN
 
+  # With Music Assistant playback (presets JSON file):
+  python test_local.py --host 192.168.1.42 --ha-url http://192.168.1.100:8123 --ha-token TOKEN \
+      --ma-entity media_player.soundtouch_20_music_assistant \
+      --presets-file presets.json
+
+  presets.json example:
+  [{"media_id": "library://radio/6", "name": "Radio Hamburg"}, {"media_id": "", "name": ""}]
+
 Environment variables work too:
   BOSE_HOST=192.168.1.42 HA_URL=http://... HA_TOKEN=... python test_local.py
 """
@@ -111,8 +119,21 @@ def _get_populated_presets(host: str) -> set[int]:
     return set(int(m) for m in re.findall(r'<preset id="(\d+)"', xml))
 
 
-def sync_presets(host: str, placeholder_url: str, preset_names: list[str] | None = None):
-    names = preset_names or []
+def _preset_name(presets: list[dict], n: int) -> str:
+    if n - 1 < len(presets):
+        name = (presets[n - 1].get("name") or "").strip()
+        if name:
+            return name
+    return f"Preset {n}"
+
+
+def _preset_media_id(presets: list[dict], n: int) -> str:
+    if n - 1 < len(presets):
+        return (presets[n - 1].get("media_id") or "").strip()
+    return ""
+
+
+def sync_presets(host: str, placeholder_url: str, presets: list[dict]):
     populated = _get_populated_presets(host)
     empty = [n for n in range(1, 7) if n not in populated]
     if not empty:
@@ -121,7 +142,7 @@ def sync_presets(host: str, placeholder_url: str, preset_names: list[str] | None
     print(f"{YELLOW}[sync]{RESET} {len(empty)} empty slot(s) need writing: {empty}")
     for n in empty:
         url = f"{placeholder_url}?preset={n}" if "?" not in placeholder_url else f"{placeholder_url}&preset={n}"
-        name = names[n - 1] if n - 1 < len(names) else f"Preset {n}"
+        name = _preset_name(presets, n)
         body = (
             f'<preset id="{n}">'
             f'<ContentItem source="UPNP" location="{url}" '
@@ -136,9 +157,29 @@ def sync_presets(host: str, placeholder_url: str, preset_names: list[str] | None
         )
         try:
             urllib.request.urlopen(req, timeout=5).read()
-            print(f"{GREEN}[sync]{RESET}  ✓ preset {n} stored")
+            print(f"{GREEN}[sync]{RESET}  ✓ preset {n} stored ({name})")
         except Exception as e:
             print(f"{RED}[sync]{RESET}  ✗ preset {n} failed: {e}")
+
+
+def play_media_ha(ha_url: str, ha_token: str, entity_id: str, media_id: str):
+    """Call music_assistant.play_media via HA REST API."""
+    data = json.dumps({
+        "entity_id": entity_id,
+        "media_id": media_id,
+        "media_type": "radio",
+        "enqueue": "replace",
+    }).encode()
+    req = urllib.request.Request(
+        f"{ha_url}/api/services/music_assistant/play_media",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {ha_token}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        r.read()
 
 
 # ---------- main -----------------------------------------------------------
@@ -156,11 +197,23 @@ def main():
                         help="Write placeholder to empty preset slots so all 6 buttons fire events")
     parser.add_argument("--placeholder-url", default=os.environ.get("PLACEHOLDER_URL", ""),
                         help="Stream URL to write into empty preset slots (required with --sync)")
+    parser.add_argument("--ma-entity", default=os.environ.get("MA_ENTITY", ""),
+                        help="Music Assistant media_player entity for playback")
+    parser.add_argument("--presets-file", default="",
+                        help="JSON file with presets list [{media_id, name}, ...]")
     args = parser.parse_args()
 
     host = args.host.strip()
     ha_url = args.ha_url.strip().rstrip("/")
     ha_token = args.ha_token.strip()
+    ma_entity = args.ma_entity.strip()
+
+    # Load presets from JSON file
+    presets: list[dict] = []
+    if args.presets_file and os.path.exists(args.presets_file):
+        with open(args.presets_file) as f:
+            presets = json.load(f)
+        print(f"{GREEN}[cfg]{RESET} loaded {len(presets)} presets from {args.presets_file}")
 
     # Discover speaker
     if not host:
@@ -187,7 +240,7 @@ def main():
             sys.exit(1)
         print(f"{CYAN}[sync]{RESET} syncing empty preset slots with: {placeholder}")
         try:
-            sync_presets(host, placeholder)
+            sync_presets(host, placeholder, presets)
         except Exception as e:
             print(f"{RED}[sync]{RESET} failed: {e}")
 
@@ -221,6 +274,18 @@ def main():
         print(f"  event_type: bose_soundtouch_preset_pressed")
         print(f"  data: {json.dumps(event_data, indent=6)}")
 
+        # Play via Music Assistant if configured
+        media_id = _preset_media_id(presets, n)
+        if media_id and ma_entity and ha_url and ha_token:
+            try:
+                play_media_ha(ha_url, ha_token, ma_entity, media_id)
+                print(f"  {GREEN}→ playing {media_id} via MA ✓{RESET}")
+            except Exception as e:
+                print(f"  {RED}→ MA playback failed: {e}{RESET}")
+        elif media_id and not ma_entity:
+            print(f"  {YELLOW}→ media_id set but no --ma-entity (skipped){RESET}")
+
+        # Fire HA event (always)
         if ha_url and ha_token:
             try:
                 fire_ha_event(ha_url, ha_token, event_data)

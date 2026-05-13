@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.0.0
+
+- **Breaking: Direct Music Assistant integration.** The `preset_names`
+  config option is replaced by a `presets` list. Each preset slot can now
+  have a `media_id` (e.g. `library://radio/6`) and a `name`.
+- **New config options:** `media_player_entity` (the Music Assistant
+  media player to target), `presets` (list of `{media_id, name}` per slot).
+- **Hybrid mode:** Presets with a `media_id` trigger Music Assistant
+  playback **and** fire the `bose_soundtouch_preset_pressed` HA event.
+  Presets without a `media_id` only fire the HA event, so automations
+  can still handle them.
+- **Auto-resolve preset names:** If a preset has a `media_id` but no
+  `name`, the addon briefly plays it on startup and reads back the
+  station name from the entity state.
+- **Removed config options:** `preset_names` (superseded by `presets`).
+
 ## 2.1.0
 
 - **Feature:** New `preset_names` config option — set custom display names

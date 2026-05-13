@@ -1,6 +1,6 @@
 name: "Bose SoundTouch Bridge"
-description: "Fires Home Assistant events when physical preset buttons are pressed on Bose SoundTouch speakers (after the Bose cloud retirement 2026). Use automations to react — e.g. play music via Music Assistant."
-version: "2.1.0"
+description: "Maps physical preset buttons on Bose SoundTouch speakers to Music Assistant playback. Press a button — the configured radio station or media plays via Music Assistant. Also fires HA events for additional automations."
+version: "3.0.0"
 slug: "bose_bridge"
 url: "https://github.com/sebastianaberle4324/homeassistant-bose-soundtouch-bridge"
 init: false
@@ -16,16 +16,25 @@ options:
   bose_host: ""
   sync_presets_on_startup: true
   placeholder_url: "http://icecast.vrtcdn.be/radio1-high.mp3"
-  preset_names:
-    - "Preset 1"
-    - "Preset 2"
-    - "Preset 3"
-    - "Preset 4"
-    - "Preset 5"
-    - "Preset 6"
+  media_player_entity: ""
+  presets:
+    - media_id: ""
+      name: ""
+    - media_id: ""
+      name: ""
+    - media_id: ""
+      name: ""
+    - media_id: ""
+      name: ""
+    - media_id: ""
+      name: ""
+    - media_id: ""
+      name: ""
 schema:
   bose_host: str
   sync_presets_on_startup: bool
   placeholder_url: str
-  preset_names:
-    - str
+  media_player_entity: str
+  presets:
+    - media_id: str
+      name: str
