@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1
+
+- **Fix:** Add `hassio_api` and `homeassistant_api` flags to `config.yaml`.
+  Without these, the addon did not receive a `SUPERVISOR_TOKEN` and could not
+  fire events to Home Assistant (HTTP 401).
+- Set default `placeholder_url` to `http://icecast.vrtcdn.be/radio1-high.mp3`.
+
 ## 2.0.0
 
 - **Breaking: Event-based architecture.** The add-on no longer pushes
