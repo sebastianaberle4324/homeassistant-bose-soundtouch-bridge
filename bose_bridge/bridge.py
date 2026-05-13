@@ -21,6 +21,7 @@ OPTIONS_PATH = "/data/options.json"
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN")
 SUPERVISOR_URL = "http://supervisor"
 PRESET_RE = re.compile(r'<nowSelectionUpdated>\s*<preset id="(\d+)"')
+SOURCE_RE = re.compile(r'<source>(\w+)</source>')
 SSDP_ADDR = ("239.255.255.250", 1900)
 SSDP_TARGET = "urn:schemas-upnp-org:device:MediaRenderer:1"
 PLACEHOLDER_URL = "http://icecast.vrtcdn.be/radio1-high.mp3"
@@ -33,14 +34,23 @@ def load_options() -> dict:
     """Read add-on options from /data/options.json (Supervisor mode)."""
     if os.path.exists(OPTIONS_PATH):
         with open(OPTIONS_PATH) as f:
-            return json.load(f)
-    return {
-        "bose_host": os.environ.get("BOSE_HOST", "").strip(),
-        "sync_presets_on_startup": os.environ.get(
-            "SYNC_PRESETS_ON_STARTUP", "true").lower() in ("1", "true", "yes", "on"),
-        "media_player_entity": os.environ.get("MEDIA_PLAYER_ENTITY", "").strip(),
-        "presets": [],
-    }
+            raw = json.load(f)
+    else:
+        raw = {
+            "bose_host": os.environ.get("BOSE_HOST", "").strip(),
+            "sync_presets_on_startup": os.environ.get(
+                "SYNC_PRESETS_ON_STARTUP", "true").lower() in ("1", "true", "yes", "on"),
+            "media_player_entity": os.environ.get("MEDIA_PLAYER_ENTITY", "").strip(),
+        }
+    # Build presets list from flat preset_N_media_id / preset_N_name fields
+    presets = []
+    for n in range(1, 7):
+        presets.append({
+            "media_id": (raw.get(f"preset_{n}_media_id") or "").strip(),
+            "name": (raw.get(f"preset_{n}_name") or f"Preset {n}").strip(),
+        })
+    raw["presets"] = presets
+    return raw
 
 
 # ---------- Bose discovery -------------------------------------------------
@@ -180,6 +190,32 @@ def fire_ha_event(preset: int, device_id: str, device_name: str, host: str):
         print(f"[ha] failed to fire event: {e}")
 
 
+def fire_ha_event_power(power_on: bool, device_id: str, device_name: str, host: str):
+    """Fire bose_soundtouch_power_on or bose_soundtouch_power_off event."""
+    if not SUPERVISOR_TOKEN:
+        return
+    event_type = "bose_soundtouch_power_on" if power_on else "bose_soundtouch_power_off"
+    data = json.dumps({
+        "device_id": device_id,
+        "device_name": device_name,
+        "speaker_host": host,
+    }).encode()
+    req = urllib.request.Request(
+        f"{SUPERVISOR_URL}/core/api/events/{event_type}",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {SUPERVISOR_TOKEN}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            r.read()
+        print(f"[ha] fired {event_type}")
+    except Exception as e:
+        print(f"[ha] failed to fire {event_type}: {e}")
+
+
 def play_media(entity_id: str, media_id: str):
     """Call music_assistant.play_media via the Supervisor API."""
     if not SUPERVISOR_TOKEN:
@@ -207,10 +243,30 @@ def play_media(entity_id: str, media_id: str):
         print(f"[ma] failed to play media: {e}")
 
 
+def stop_media(entity_id: str):
+    """Stop Music Assistant playback via the Supervisor API."""
+    if not SUPERVISOR_TOKEN:
+        return
+    data = json.dumps({"entity_id": entity_id}).encode()
+    req = urllib.request.Request(
+        f"{SUPERVISOR_URL}/core/api/services/media_player/media_stop",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {SUPERVISOR_TOKEN}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            r.read()
+        print(f"[ma] stopped playback on {entity_id}")
+    except Exception as e:
+        print(f"[ma] failed to stop: {e}")
+
+
 def discover_media_player() -> str:
     """Auto-detect a Music Assistant media_player entity via the HA states API.
-    Returns the entity_id of the first entity whose platform is
-    'music_assistant', or empty string if none found."""
+    Looks for entities with a mass_player_type attribute."""
     if not SUPERVISOR_TOKEN:
         return ""
     try:
@@ -276,19 +332,7 @@ def resolve_preset_names(entity_id: str, presets: list[dict]) -> list[dict]:
                 print(f"[ma] preset {i+1}: name resolution failed: {e}")
 
     # Stop playback after resolution
-    try:
-        stop_data = json.dumps({"entity_id": entity_id}).encode()
-        req = urllib.request.Request(
-            f"{SUPERVISOR_URL}/core/api/services/media_player/media_stop",
-            data=stop_data,
-            headers={
-                "Authorization": f"Bearer {SUPERVISOR_TOKEN}",
-                "Content-Type": "application/json",
-            },
-        )
-        urllib.request.urlopen(req, timeout=5).read()
-    except Exception:
-        pass
+    stop_media(entity_id)
 
     return resolved
 
@@ -315,6 +359,7 @@ def main():
     if not SUPERVISOR_TOKEN:
         print("[ha] WARNING: SUPERVISOR_TOKEN not set — events and playback disabled")
 
+    auto_play = cfg.get("auto_play_on_power_on", True)
     entity_id = (cfg.get("media_player_entity") or "").strip()
     presets = cfg.get("presets") or []
 
@@ -342,6 +387,11 @@ def main():
     else:
         print(f"[cfg] mode: HA events only (configure presets with media_id for MA playback)")
 
+    if auto_play:
+        print("[cfg] auto_play_on_power_on: enabled")
+    else:
+        print("[cfg] auto_play_on_power_on: disabled")
+
     # Resolve missing names from Music Assistant
     if entity_id and any(
         (p.get("media_id") or "").strip() and not (p.get("name") or "").strip()
@@ -360,7 +410,35 @@ def main():
         print("[sync] preset sync disabled")
 
     # WebSocket loop ----------------------------------------------------
+    last_preset = [1]       # mutable so closures can update it (default: preset 1)
+    was_standby = [False]   # track standby state for power-on detection
+
     def on_message(_ws, msg):
+        # --- power on/off detection ---
+        if '<nowPlayingUpdated>' in msg:
+            m_src = SOURCE_RE.search(msg)
+            if m_src:
+                source = m_src.group(1)
+                if source == 'STANDBY':
+                    if not was_standby[0]:
+                        print("[ws] speaker entered standby")
+                        fire_ha_event_power(False, device_id, friendly, host)
+                        # Stop MA playback so it doesn't restart the speaker
+                        if entity_id:
+                            stop_media(entity_id)
+                    was_standby[0] = True
+                elif was_standby[0]:
+                    was_standby[0] = False
+                    print("[ws] speaker powered on")
+                    fire_ha_event_power(True, device_id, friendly, host)
+                    # Auto-play last preset on power on
+                    if auto_play and entity_id:
+                        media_id = _preset_media_id(presets, last_preset[0])
+                        if media_id:
+                            print(f"[ws] auto-playing preset {last_preset[0]}")
+                            play_media(entity_id, media_id)
+
+        # --- preset button press ---
         m = PRESET_RE.search(msg)
         if not m:
             return
@@ -368,6 +446,7 @@ def main():
         if n == 0:
             return
         print(f"[ws] physical preset {n} press")
+        last_preset[0] = n
 
         # Play via Music Assistant if this preset has a media_id
         media_id = _preset_media_id(presets, n)

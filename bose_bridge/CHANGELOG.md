@@ -1,9 +1,28 @@
 # Changelog
 
+## 3.2.0
+
+- **Power on/off detection.** The addon detects when the speaker enters
+  or leaves standby via the WebSocket and fires separate events:
+  `bose_soundtouch_power_on` and `bose_soundtouch_power_off`.
+- **Auto-play on power on.** When the speaker powers on, the addon
+  automatically resumes the last played preset via Music Assistant.
+  Defaults to preset 1 if none was pressed yet.
+  Controlled by the new `auto_play_on_power_on` option (default: on).
+- **Auto-stop on power off.** When the speaker enters standby, the
+  addon stops Music Assistant playback so MA doesn't accidentally
+  restart the speaker.
+- **Flat preset config.** Presets are now individual fields
+  (`preset_1_media_id`, `preset_1_name`, etc.) instead of a nested list.
+  No more "Add" button or expand/collapse in the config UI.
+- **Fix:** Detect MA entities by `mass_player_type` attribute (was
+  `mass_player_id`).
+- **Removed:** `placeholder_url` config option (hardcoded internally).
+
 ## 3.1.0
 
 - **Auto-detect Music Assistant entity.** If `media_player_entity` is
-  left blank, the addon queries HA for entities with a `mass_player_id`
+  left blank, the addon queries HA for entities with a `mass_player_type`
   attribute. If exactly one is found it is used automatically.
 - **Preset defaults.** Empty presets now show "Preset 1"..."Preset 6"
   in the config UI instead of blank fields.

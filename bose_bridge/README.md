@@ -27,12 +27,24 @@ flexibility for non-Music-Assistant use cases (scenes, scripts, etc.).
 - If a preset has a `media_id` but no `name`, the add-on resolves the
   name from Music Assistant on startup.
 
-## Event format
+## Events
+
+### Preset pressed
 
 ```yaml
 event_type: bose_soundtouch_preset_pressed
 data:
   preset: 3          # 1-6
+  device_id: "A0B1C2D3E4F5"
+  device_name: "Living Room"
+  speaker_host: "192.168.1.42"
+```
+
+### Power on / off
+
+```yaml
+event_type: bose_soundtouch_power_on   # or bose_soundtouch_power_off
+data:
   device_id: "A0B1C2D3E4F5"
   device_name: "Living Room"
   speaker_host: "192.168.1.42"
@@ -46,10 +58,10 @@ data:
 4. Set `media_player_entity` to your Music Assistant media player
    (e.g. `media_player.soundtouch_20_music_assistant`), or leave blank
    for auto-detection.
-5. Fill in the `presets` list — set `media_id` for Music Assistant
-   playback (e.g. `library://radio/6`), or leave empty for event-only.
-   The `name` field is shown on the speaker's display; leave blank to
-   auto-resolve from Music Assistant.
+5. Fill in the preset fields — set `preset_N_media_id` for Music
+   Assistant playback (e.g. `library://radio/6`), or leave empty for
+   event-only. The `preset_N_name` field is shown on the speaker's
+   display; leave blank to auto-resolve from Music Assistant.
 6. **Save** then **Start** the add-on. Check the **Log** tab:
    ```
    [info] speaker: Living Room (SoundTouch 30) - id A0B1C2D3E4F5
@@ -68,8 +80,10 @@ data:
 |---|---|---|
 | `bose_host` | `""` | Speaker IP. Leave blank for SSDP auto-discovery. |
 | `sync_presets_on_startup` | `true` | Populate empty preset slots so all 6 buttons work. |
+| `auto_play_on_power_on` | `true` | Resume last preset when speaker powers on. |
 | `media_player_entity` | `""` | Music Assistant entity. Leave blank for auto-detection. |
-| `presets` | 6 empty slots | List of `{media_id, name}`. Set `media_id` for MA playback, leave empty for event-only. |
+| `preset_N_media_id` | `""` | MA media ID for preset N (e.g. `library://radio/6`). Leave empty for event-only. |
+| `preset_N_name` | `"Preset N"` | Display name on the speaker for preset N. |
 
 ## Example automation (event-only preset)
 
@@ -100,20 +114,6 @@ automation:
 2. Add this repository's GitHub URL
 3. The "Bose SoundTouch Bridge" add-on appears in the store — click
    **Install** → **Start**
-
-## How it works
-
-- Bose's stock firmware exposes a WebSocket notification stream on
-  `ws://<speaker>:8080` (subprotocol `gabbo`). It emits an event for
-  every preset button press:
-  `<nowSelectionUpdated><preset id="N">…`
-- The add-on catches these events and fires a Home Assistant event via
-  the Supervisor REST API.
-- On startup, empty preset slots are populated via the speaker's
-  `/storePreset` API (unique placeholder URL per slot to avoid
-  deduplication).
-- No Bose cloud, no UPnP, no MQTT — just HTTP API + WebSocket + HA
-  events.
 
 ## Limitations
 
