@@ -14,13 +14,14 @@ import re
 import socket
 import time
 import urllib.request
+from xml.sax.saxutils import escape as xml_escape
 
 import websocket
 
 OPTIONS_PATH = "/data/options.json"
+DISCOVERED_PATH = "/data/discovered.json"
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN")
 SUPERVISOR_URL = "http://supervisor"
-ADDON_SLUG = "local_bose_bridge"
 PRESET_RE = re.compile(r'<nowSelectionUpdated>\s*<preset id="(\d+)"')
 SOURCE_RE = re.compile(r'<source>(\w+)</source>')
 SSDP_ADDR = ("239.255.255.250", 1900)
@@ -32,7 +33,9 @@ PLACEHOLDER_URL = "http://icecast.vrtcdn.be/radio1-high.mp3"
 
 
 def load_options() -> dict:
-    """Read add-on options from /data/options.json (Supervisor mode)."""
+    """Read add-on options from /data/options.json (Supervisor mode).
+    For blank bose_host / media_player_entity, fall back to previously
+    auto-discovered values from /data/discovered.json."""
     if os.path.exists(OPTIONS_PATH):
         with open(OPTIONS_PATH) as f:
             raw = json.load(f)
@@ -43,6 +46,12 @@ def load_options() -> dict:
                 "SYNC_PRESETS_ON_STARTUP", "true").lower() in ("1", "true", "yes", "on"),
             "media_player_entity": os.environ.get("MEDIA_PLAYER_ENTITY", "").strip(),
         }
+    # Fill blank fields from previously discovered values
+    discovered = _load_discovered()
+    for key in ("bose_host", "media_player_entity"):
+        if not (raw.get(key) or "").strip() and discovered.get(key):
+            raw[key] = discovered[key]
+            print(f"[cfg] using discovered {key}={discovered[key]}")
     # Build presets list from flat preset_N_media_id / preset_N_name fields
     presets = []
     for n in range(1, 7):
@@ -54,34 +63,27 @@ def load_options() -> dict:
     return raw
 
 
-def save_option(key: str, value: str):
-    """Persist a single option back to the addon config via the Supervisor API."""
-    if not SUPERVISOR_TOKEN:
-        return
+def _load_discovered() -> dict:
+    """Load previously auto-discovered values from local storage."""
+    if os.path.exists(DISCOVERED_PATH):
+        try:
+            with open(DISCOVERED_PATH) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_discovered(key: str, value: str):
+    """Persist an auto-discovered value to /data/discovered.json."""
+    data = _load_discovered()
+    data[key] = value
     try:
-        # Read current options
-        req = urllib.request.Request(
-            f"{SUPERVISOR_URL}/addons/{ADDON_SLUG}/options",
-            headers={"Authorization": f"Bearer {SUPERVISOR_TOKEN}"},
-        )
-        with urllib.request.urlopen(req, timeout=5) as r:
-            current = json.loads(r.read().decode()).get("data", {}).get("options", {})
-        # Update the single key
-        current[key] = value
-        body = json.dumps({"options": current}).encode()
-        req = urllib.request.Request(
-            f"{SUPERVISOR_URL}/addons/{ADDON_SLUG}/options",
-            data=body,
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {SUPERVISOR_TOKEN}",
-                "Content-Type": "application/json",
-            },
-        )
-        urllib.request.urlopen(req, timeout=5).read()
-        print(f"[cfg] saved {key}={value} to addon config")
+        with open(DISCOVERED_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+        print(f"[cfg] saved {key}={value} to {DISCOVERED_PATH}")
     except Exception as e:
-        print(f"[cfg] could not save {key} to addon config: {e}")
+        print(f"[cfg] could not save {key}: {e}")
 
 
 # ---------- Bose discovery -------------------------------------------------
@@ -181,7 +183,7 @@ def sync_presets(host: str, presets: list[dict]):
     print(f"[sync] {len(needs_write)} slot(s) need writing: {needs_write}")
     for n in needs_write:
         url = f"{PLACEHOLDER_URL}?preset={n}"
-        name = _preset_name(presets, n)
+        name = xml_escape(_preset_name(presets, n))
         body = (
             f'<preset id="{n}">'
             f'<ContentItem source="UPNP" location="{url}" '
@@ -420,7 +422,7 @@ def main():
                 "Configuration tab and restart."
             )
         print(f"[cfg] discovered SoundTouch at {host}")
-        save_option("bose_host", host)
+        save_discovered("bose_host", host)
 
     device_id, friendly, model = fetch_speaker_info(host)
     print(f"[info] speaker: {friendly} ({model}) — id {device_id}")
@@ -436,7 +438,7 @@ def main():
     if not entity_id:
         entity_id = discover_media_player(device_id, model)
         if entity_id:
-            save_option("media_player_entity", entity_id)
+            save_discovered("media_player_entity", entity_id)
 
     # Log preset config
     has_ma_presets = False

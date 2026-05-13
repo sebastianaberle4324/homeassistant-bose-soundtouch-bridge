@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.1
+
+- **Security: remove admin role.** Config persistence now uses a local
+  file (`/data/discovered.json`) instead of the Supervisor API, so
+  `hassio_role: admin` is no longer needed. The addon runs with the
+  default (minimal) Supervisor role.
+- **Security: XML escape preset names.** Preset names are now escaped
+  before embedding in XML payloads sent to the speaker.
+
 ## 3.3.0
 
 - **Auto-save discovered config.** When `bose_host` or `media_player_entity`
