@@ -55,9 +55,12 @@ data:
 1. Install this add-on (see root README for install button).
 2. Open the add-on Configuration tab.
 3. Set `bose_host` to the speaker's IP, or leave blank for auto-discovery.
+   When auto-discovered, the IP is saved to the config automatically —
+   clear the field to trigger auto-discovery again.
 4. Set `media_player_entity` to your Music Assistant media player
    (e.g. `media_player.soundtouch_20_music_assistant`), or leave blank
-   for auto-detection.
+   for auto-detection. When auto-detected, the entity is saved to the
+   config automatically — clear the field to trigger auto-detection again.
 5. Fill in the preset fields — set `preset_N_media_id` for Music
    Assistant playback (e.g. `library://radio/6`), or leave empty for
    event-only. The `preset_N_name` field is shown on the speaker's
@@ -78,10 +81,10 @@ data:
 
 | Option | Default | Description |
 |---|---|---|
-| `bose_host` | `""` | Speaker IP. Leave blank for SSDP auto-discovery. |
+| `bose_host` | `""` | Speaker IP. Auto-discovered via SSDP if blank; saved to config once found. Clear to re-discover. |
 | `sync_presets_on_startup` | `true` | Populate empty preset slots so all 6 buttons work. |
 | `auto_play_on_power_on` | `true` | Resume last preset when speaker powers on. |
-| `media_player_entity` | `""` | Music Assistant entity. Leave blank for auto-detection. |
+| `media_player_entity` | `""` | Music Assistant entity. Auto-detected if blank (matched by Bose device ID); saved to config once found. Clear to re-detect. |
 | `preset_N_media_id` | `""` | MA media ID for preset N (e.g. `library://radio/6`). Leave empty for event-only. |
 | `preset_N_name` | `"Preset N"` | Display name on the speaker for preset N. |
 

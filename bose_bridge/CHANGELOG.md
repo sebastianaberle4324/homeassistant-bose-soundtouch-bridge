@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.3.0
+
+- **Auto-save discovered config.** When `bose_host` or `media_player_entity`
+  are left blank, the auto-discovered values are now saved back to the
+  addon config via the Supervisor API. Clear a field to re-trigger
+  auto-discovery on next restart.
+- **Smarter MA entity detection.** When multiple Music Assistant players
+  exist, the addon now matches by Bose device ID in the `active_queue`
+  attribute (exact hardware match) instead of just picking the first one.
+  Falls back to speaker model name matching.
+- **Preset name sync.** `sync_presets` now also updates preset slots
+  whose display name differs from the configured name, not just empty slots.
+
 ## 3.2.0
 
 - **Power on/off detection.** The addon detects when the speaker enters

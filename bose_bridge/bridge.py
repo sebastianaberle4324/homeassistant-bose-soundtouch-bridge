@@ -20,6 +20,7 @@ import websocket
 OPTIONS_PATH = "/data/options.json"
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN")
 SUPERVISOR_URL = "http://supervisor"
+ADDON_SLUG = "local_bose_bridge"
 PRESET_RE = re.compile(r'<nowSelectionUpdated>\s*<preset id="(\d+)"')
 SOURCE_RE = re.compile(r'<source>(\w+)</source>')
 SSDP_ADDR = ("239.255.255.250", 1900)
@@ -51,6 +52,36 @@ def load_options() -> dict:
         })
     raw["presets"] = presets
     return raw
+
+
+def save_option(key: str, value: str):
+    """Persist a single option back to the addon config via the Supervisor API."""
+    if not SUPERVISOR_TOKEN:
+        return
+    try:
+        # Read current options
+        req = urllib.request.Request(
+            f"{SUPERVISOR_URL}/addons/{ADDON_SLUG}/options",
+            headers={"Authorization": f"Bearer {SUPERVISOR_TOKEN}"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            current = json.loads(r.read().decode()).get("data", {}).get("options", {})
+        # Update the single key
+        current[key] = value
+        body = json.dumps({"options": current}).encode()
+        req = urllib.request.Request(
+            f"{SUPERVISOR_URL}/addons/{ADDON_SLUG}/options",
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {SUPERVISOR_TOKEN}",
+                "Content-Type": "application/json",
+            },
+        )
+        urllib.request.urlopen(req, timeout=5).read()
+        print(f"[cfg] saved {key}={value} to addon config")
+    except Exception as e:
+        print(f"[cfg] could not save {key} to addon config: {e}")
 
 
 # ---------- Bose discovery -------------------------------------------------
@@ -102,14 +133,17 @@ def fetch_speaker_info(host: str) -> tuple[str, str, str]:
 # ---------- preset sync ----------------------------------------------------
 
 
-def _get_populated_presets(host: str) -> set[int]:
-    """Return set of preset IDs that already have content stored."""
+def _get_stored_presets(host: str) -> dict[int, str]:
+    """Return dict mapping preset ID -> stored itemName from the speaker."""
     try:
         with urllib.request.urlopen(f"http://{host}:8090/presets", timeout=5) as r:
             xml = r.read().decode()
     except Exception:
-        return set()
-    return set(int(m) for m in re.findall(r'<preset id="(\d+)"', xml))
+        return {}
+    result = {}
+    for m in re.finditer(r'<preset id="(\d+)"[^>]*>.*?<itemName>([^<]*)</itemName>.*?</preset>', xml, re.DOTALL):
+        result[int(m.group(1))] = m.group(2)
+    return result
 
 
 def _preset_name(presets: list[dict], n: int) -> str:
@@ -131,14 +165,21 @@ def _preset_media_id(presets: list[dict], n: int) -> str:
 def sync_presets(host: str, presets: list[dict]):
     """Ensure all 6 preset slots are populated so physical button presses
     emit WebSocket events. Writes a placeholder via /storePreset to any
-    empty slot. Uses unique URLs per slot to avoid deduplication."""
-    populated = _get_populated_presets(host)
-    empty = [n for n in range(1, 7) if n not in populated]
-    if not empty:
-        print("[sync] all 6 preset slots already populated — skipping")
+    empty slot or slot whose name differs from the configured name."""
+    stored = _get_stored_presets(host)
+    needs_write = []
+    for n in range(1, 7):
+        want_name = _preset_name(presets, n)
+        if n not in stored:
+            needs_write.append(n)
+        elif stored[n] != want_name:
+            needs_write.append(n)
+            print(f"[sync] preset {n} name mismatch: '{stored[n]}' -> '{want_name}'")
+    if not needs_write:
+        print("[sync] all 6 preset slots already populated with correct names — skipping")
         return
-    print(f"[sync] {len(empty)} empty slot(s) need writing: {empty}")
-    for n in empty:
+    print(f"[sync] {len(needs_write)} slot(s) need writing: {needs_write}")
+    for n in needs_write:
         url = f"{PLACEHOLDER_URL}?preset={n}"
         name = _preset_name(presets, n)
         body = (
@@ -264,9 +305,12 @@ def stop_media(entity_id: str):
         print(f"[ma] failed to stop: {e}")
 
 
-def discover_media_player() -> str:
+def discover_media_player(device_id: str = "", speaker_name: str = "") -> str:
     """Auto-detect a Music Assistant media_player entity via the HA states API.
-    Looks for entities with a mass_player_type attribute."""
+    Looks for entities with a mass_player_type attribute.
+    If device_id is given, match against the active_queue attribute which
+    contains the Bose MAC (e.g. active_queue='up5065836244da').
+    Falls back to matching speaker_name in entity_id / friendly_name."""
     if not SUPERVISOR_TOKEN:
         return ""
     try:
@@ -281,19 +325,43 @@ def discover_media_player() -> str:
         return ""
 
     ma_entities = [
-        s["entity_id"] for s in states
+        s for s in states
         if s.get("entity_id", "").startswith("media_player.")
         and s.get("attributes", {}).get("mass_player_type")
     ]
     if not ma_entities:
         print("[ma] no Music Assistant media_player entities found")
         return ""
-    if len(ma_entities) == 1:
-        print(f"[ma] auto-detected: {ma_entities[0]}")
-        return ma_entities[0]
+
+    # 1. Try to match by Bose device_id in active_queue
+    if device_id and len(ma_entities) > 1:
+        did = device_id.lower()
+        matched = [
+            s for s in ma_entities
+            if did in (s.get("attributes", {}).get("active_queue") or "").lower()
+        ]
+        if matched:
+            print(f"[ma] matched by device_id {device_id} in active_queue")
+            ma_entities = matched
+
+    # 2. Fallback: match by speaker name in entity_id / friendly_name
+    if speaker_name and len(ma_entities) > 1:
+        needle = speaker_name.lower().replace(" ", "_")
+        matched = [
+            s for s in ma_entities
+            if needle in s["entity_id"].lower()
+            or needle.replace("_", " ") in (s.get("attributes", {}).get("friendly_name") or "").lower()
+        ]
+        if matched:
+            ma_entities = matched
+
+    ids = [s["entity_id"] for s in ma_entities]
+    if len(ids) == 1:
+        print(f"[ma] auto-detected: {ids[0]}")
+        return ids[0]
     # Multiple found — list them, pick none
-    print(f"[ma] found {len(ma_entities)} Music Assistant entities:")
-    for e in ma_entities:
+    print(f"[ma] found {len(ids)} Music Assistant entities:")
+    for e in ids:
         print(f"[ma]   - {e}")
     print("[ma] set media_player_entity in config to pick one")
     return ""
@@ -352,6 +420,7 @@ def main():
                 "Configuration tab and restart."
             )
         print(f"[cfg] discovered SoundTouch at {host}")
+        save_option("bose_host", host)
 
     device_id, friendly, model = fetch_speaker_info(host)
     print(f"[info] speaker: {friendly} ({model}) — id {device_id}")
@@ -365,7 +434,9 @@ def main():
 
     # Auto-detect media_player entity if not configured
     if not entity_id:
-        entity_id = discover_media_player()
+        entity_id = discover_media_player(device_id, model)
+        if entity_id:
+            save_option("media_player_entity", entity_id)
 
     # Log preset config
     has_ma_presets = False

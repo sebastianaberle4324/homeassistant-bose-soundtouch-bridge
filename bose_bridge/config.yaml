@@ -1,6 +1,6 @@
 name: "Bose SoundTouch Bridge"
 description: "Maps physical preset buttons on Bose SoundTouch speakers to Music Assistant playback. Press a button — the configured radio station or media plays via Music Assistant. Also fires HA events for additional automations."
-version: "3.2.0"
+version: "3.3.0"
 slug: "bose_bridge"
 url: "https://github.com/sebastianaberle4324/homeassistant-bose-soundtouch-bridge"
 init: false
@@ -47,10 +47,10 @@ schema:
   preset_6_media_id: "str?"
   preset_6_name: "str?"
 descriptions:
-  bose_host: "IP address of the speaker (e.g. 192.168.1.42). Leave blank for auto-discovery."
+  bose_host: "Speaker IP (e.g. 192.168.1.42). Leave blank to auto-discover via SSDP; the found IP is saved here automatically. Clear to re-discover."
   sync_presets_on_startup: "Write placeholders into empty preset slots so all 6 buttons fire events."
   auto_play_on_power_on: "Automatically resume the last preset when the speaker powers on."
-  media_player_entity: "Music Assistant media player entity (e.g. media_player.soundtouch_20_music_assistant). Leave blank for auto-detection."
+  media_player_entity: "Music Assistant entity (e.g. media_player.soundtouch_20_music_assistant). Leave blank to auto-detect; the found entity is saved here automatically. Clear to re-detect."
   preset_1_media_id: "Music Assistant media ID for preset 1 (e.g. library://radio/6). Leave blank for event-only."
   preset_1_name: "Display name for preset 1 on the speaker."
   preset_2_media_id: "Music Assistant media ID for preset 2 (e.g. library://radio/9)."
