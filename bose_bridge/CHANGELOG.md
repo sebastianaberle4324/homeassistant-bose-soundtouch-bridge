@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.0.0
+
+- **Breaking: Event-based architecture.** The add-on no longer pushes
+  streams to the speaker via UPnP. Instead, it fires a
+  `bose_soundtouch_preset_pressed` Home Assistant event whenever a
+  physical preset button is pressed. Use HA automations to react — e.g.
+  play music via Music Assistant, trigger scenes, etc.
+- **Preset sync via `/storePreset` API.** Empty preset slots are
+  populated on startup using the speaker's native `/storePreset`
+  endpoint — instant, no audio blips, no UPnP needed. Each slot gets a
+  unique placeholder URL (query parameter) to avoid deduplication.
+  Configure `placeholder_url` with any HTTP stream URL.
+- **Removed:** UPnP stream pushing, MQTT button entities,
+  radio-browser.info metadata lookup, standalone Docker support.
+- **Removed config options:** `preset_1_url` … `preset_6_url`.
+- **New config options:** `placeholder_url` (stream URL for empty
+  preset slots), `sync_presets_on_startup` (default `true`).
+- **Simplified dependencies:** removed `upnpclient`, `paho-mqtt`,
+  `py3-lxml`. Only `websocket-client` remains.
+- Event data includes `preset` (1–6), `device_id`, `device_name`, and
+  `speaker_host` for use in automations.
+
 ## 1.5.0
 
 - **Standalone Docker image** for Home Assistant Container / plain

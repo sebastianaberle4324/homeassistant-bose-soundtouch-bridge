@@ -1,11 +1,9 @@
 ARG BUILD_FROM
 FROM ${BUILD_FROM}
 
-RUN apk add --no-cache python3 py3-pip py3-lxml \
+RUN apk add --no-cache python3 py3-pip \
  && pip3 install --no-cache-dir --break-system-packages \
-        upnpclient \
-        websocket-client \
-        paho-mqtt
+        websocket-client
 
 COPY bridge.py /
 COPY run.sh /
