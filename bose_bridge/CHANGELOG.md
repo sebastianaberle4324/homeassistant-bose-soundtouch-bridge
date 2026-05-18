@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.0
+
+- **Faster skip: remove double-press delay.** Pressing the active
+  preset now triggers next track immediately (no 2s wait). Previous
+  track feature removed to eliminate the detection window that added
+  latency to every button press.
+
 ## 3.4.0
 
 - **Next/previous track via preset buttons.** Pressing the currently
