@@ -267,7 +267,7 @@ def play_media(entity_id: str, media_id: str):
     data = json.dumps({
         "entity_id": entity_id,
         "media_id": media_id,
-        "enqueue": "replace",
+        "enqueue": "play",
     }).encode()
     req = urllib.request.Request(
         f"{SUPERVISOR_URL}/core/api/services/music_assistant/play_media",
@@ -283,6 +283,48 @@ def play_media(entity_id: str, media_id: str):
         print(f"[ma] playing {media_id} on {entity_id}")
     except Exception as e:
         print(f"[ma] failed to play media: {e}")
+
+
+def next_track(entity_id: str):
+    """Skip to next track via the Supervisor API."""
+    if not SUPERVISOR_TOKEN:
+        return
+    data = json.dumps({"entity_id": entity_id}).encode()
+    req = urllib.request.Request(
+        f"{SUPERVISOR_URL}/core/api/services/media_player/media_next_track",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {SUPERVISOR_TOKEN}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            r.read()
+        print(f"[ma] next track on {entity_id}")
+    except Exception as e:
+        print(f"[ma] failed to skip: {e}")
+
+
+def previous_track(entity_id: str):
+    """Skip to previous track via the Supervisor API."""
+    if not SUPERVISOR_TOKEN:
+        return
+    data = json.dumps({"entity_id": entity_id}).encode()
+    req = urllib.request.Request(
+        f"{SUPERVISOR_URL}/core/api/services/media_player/media_previous_track",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {SUPERVISOR_TOKEN}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            r.read()
+        print(f"[ma] previous track on {entity_id}")
+    except Exception as e:
+        print(f"[ma] failed to go back: {e}")
 
 
 def stop_media(entity_id: str):
@@ -483,6 +525,9 @@ def main():
 
     # WebSocket loop ----------------------------------------------------
     last_preset = [1]       # mutable so closures can update it (default: preset 1)
+    last_press_time = [0.0]  # timestamp of last preset press
+    last_press_preset = [0]  # which preset was last pressed
+    DOUBLE_PRESS_WINDOW = 2.0  # seconds to detect a double-press
 
     # Detect initial standby state from /now_playing
     initial_standby = False
@@ -530,13 +575,33 @@ def main():
         n = int(m.group(1))
         if n == 0:
             return
-        print(f"[ws] physical preset {n} press")
-        last_preset[0] = n
 
-        # Play via Music Assistant if this preset has a media_id
-        media_id = _preset_media_id(presets, n)
-        if media_id and entity_id:
-            play_media(entity_id, media_id)
+        now = time.time()
+        same_preset = (n == last_press_preset[0])
+        elapsed = now - last_press_time[0]
+
+        if same_preset and elapsed < DOUBLE_PRESS_WINDOW:
+            # Double-press on same preset → previous track
+            print(f"[ws] preset {n} double-press → previous track")
+            if entity_id:
+                previous_track(entity_id)
+            last_press_time[0] = 0.0  # reset so triple doesn't re-trigger
+        elif same_preset and n == last_preset[0]:
+            # Single re-press on active preset → next track
+            print(f"[ws] preset {n} re-press → next track")
+            if entity_id:
+                next_track(entity_id)
+            last_press_time[0] = now
+        else:
+            # Different preset → switch media
+            print(f"[ws] physical preset {n} press")
+            last_preset[0] = n
+            media_id = _preset_media_id(presets, n)
+            if media_id and entity_id:
+                play_media(entity_id, media_id)
+            last_press_time[0] = now
+
+        last_press_preset[0] = n
 
         # Always fire HA event (for automations / presets without media_id)
         fire_ha_event(n, device_id, friendly, host)

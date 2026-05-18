@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.4.0
+
+- **Next/previous track via preset buttons.** Pressing the currently
+  active preset again skips to the next track. Double-pressing it
+  (within 2 seconds) goes to the previous track. Different preset
+  buttons still switch media as before.
+
 ## 3.3.4
 
 - **Remove hardcoded `media_type: radio` from play_media call.** Music
